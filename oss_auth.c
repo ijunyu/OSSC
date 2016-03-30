@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <assert.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
 #include "include/oss_auth.h"
 #include "include/oss_constants.h"

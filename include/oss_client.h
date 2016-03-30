@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include "oss_object_metadata.h"
 #include "oss_put_object_result.h"
+#include "curl/curl.h"
 
 typedef struct oss_client_s {
 	char *endpoint;       /**< hostname */
@@ -28,6 +29,29 @@ struct curl_request_param_s {
 typedef struct curl_request_param_s curl_request_param_t;
 
 /**
+* sender:来自custom_data的sender
+* speed:上传速度，默认bytes/second
+* remaining_time:剩余时间
+* progress_percentage:上传进度百分比
+*/
+typedef void(*progress_info_callback)(void *sender, double speed, double remaining_time, double progress_percentage);
+
+typedef struct
+{
+	void *sender;	// 此参数将传递给cb的第一个参数sender
+	progress_info_callback cb;
+	const char *gmtdate;
+	const char *sign;
+}custom_data;
+
+typedef struct
+{
+	void *sender;
+	CURL *handle;
+	progress_info_callback cb;
+}user_progress_data;
+
+/**
 * oss_client_t 带endpoint参数的构造函数
 * @param access_id [in] 用户的OSS服务用户名
 * @param access_key [in] 用户的OSS服务密码
@@ -46,5 +70,12 @@ oss_client_t *client_initialize_with_endpoint(const char *access_id, const char 
 */
 void client_finalize(oss_client_t *client);
 
-oss_put_object_result_t *client_put_object_from_file(oss_client_t *client, const char *bucket_name, const char *key, void *input, oss_object_metadata_t *metadata, unsigned short *retcode);
+//oss_put_object_result_t *client_put_object_from_file(oss_client_t *client, const char *bucket_name, const char *key, void *input, oss_object_metadata_t *metadata, unsigned short *retcode);
+oss_put_object_result_t *
+client_put_object_from_file(oss_client_t *client, 
+	const char *bucket_name, 
+	const char *key, void *input, 
+	oss_object_metadata_t *metadata, 
+	unsigned short *retcode, 
+	custom_data *custom);
 #endif

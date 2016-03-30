@@ -1,5 +1,5 @@
 #include "include/oss_map.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <string.h>
 

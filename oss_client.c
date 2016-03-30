@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include "include/oss_client.h"
 #include "include/oss_constants.h"
 #include "include/oss_time.h"
@@ -16,9 +16,8 @@ oss_client_t *_client_initialize(
 		const char *access_key, unsigned int access_key_len,
 		const char *endpoint, unsigned int endpoint_len)
 {
-	assert(access_id != NULL);
-	assert(access_key != NULL);
-	assert(endpoint != NULL);
+	if (access_id == NULL || access_key == NULL || endpoint == NULL)
+		return NULL;
 
 	unsigned int byte_of_char = sizeof(char);
 	oss_client_t *client = NULL;
@@ -66,10 +65,8 @@ oss_client_t *client_initialize_with_endpoint(const char *access_id,
 		const char *access_key,
 		const char *endpoint)
 {
-
-	assert(access_id != NULL);
-	assert(access_key != NULL);
-	assert(endpoint != NULL);
+	if (access_id == NULL || access_key == NULL || endpoint == NULL)
+		return NULL;
 
 	unsigned int access_id_len = strlen(access_id);
 	unsigned int access_key_len = strlen(access_key);
@@ -95,7 +92,8 @@ object_curl_operation(const char *method,
 		const char *resource,
 		const char *url,
 		struct curl_slist *http_headers,
-		void *user_data)
+		void *user_data, 
+		custom_data *custom)
 {
 	assert(method != NULL);
 	assert(resource != NULL);
@@ -113,7 +111,18 @@ object_curl_operation(const char *method,
 
 	curl = curl_easy_init();
 	if (curl != NULL) {
-		curl_easy_setopt(curl, CURLOPT_URL, url);
+
+		char buf[1024] = { 0 };
+		strncpy(buf, url, strlen(url));
+
+		char *filename = strrchr(buf, '/');
+		++filename;
+
+		char *out = curl_easy_escape(curl, filename, strlen(filename));
+		memset(filename, '\0', strlen(filename));
+		strncpy(filename, out, strlen(out));
+
+		curl_easy_setopt(curl, CURLOPT_URL, buf);
 		curl_easy_setopt(curl, CURL_HTTP_VERSION_1_1, 1L);
 
 		if (strcmp(method, OSS_HTTP_PUT) == 0) {
@@ -126,6 +135,11 @@ object_curl_operation(const char *method,
 			curl_easy_setopt(curl, CURLOPT_WRITEDATA, recv_buffer);
 			curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, object_curl_operation_header_callback);
 			curl_easy_setopt(curl, CURLOPT_HEADERDATA, header_buffer);
+
+			user_progress_data data = {custom->sender, curl, custom->cb};
+			curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+			curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &data);
+			curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, object_curl_progress_callback);
 		} else if (strcmp(method, OSS_HTTP_GET) == 0) {
 			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, object_curl_operation_recv_to_buffer_2nd_callback);
 			curl_easy_setopt(curl, CURLOPT_WRITEDATA, recv_buffer);
@@ -166,13 +180,11 @@ client_put_object_from_file(oss_client_t *client,
 		const char *key,
 		void *input, /**< 文件指针*/
 		oss_object_metadata_t *metadata,
-		unsigned short *retcode)
+		unsigned short *retcode, 
+		custom_data *custom)
 {
-
-	assert(client != NULL);
-	assert(bucket_name != NULL);
-	assert(key != NULL);
-	assert(input != NULL);
+	if (client == NULL || bucket_name == NULL || key == NULL || input == NULL)
+		return NULL;
 
 	curl_request_param_t *user_data = 
 		(curl_request_param_t *)malloc(sizeof(curl_request_param_t));
@@ -250,6 +262,7 @@ client_put_object_from_file(oss_client_t *client,
 	}
 	
 	oss_map_put(default_headers, OSS_DATE, now);
+	// oss_map_put(default_headers, OSS_DATE, custom->gmtdate);
 
 	/**
 	 * 生成签名值
@@ -258,6 +271,7 @@ client_put_object_from_file(oss_client_t *client,
 			default_headers, user_headers, resource, &sign_len);
 
 	sprintf(header_auth, "Authorization: OSS %s:%s", client->access_id, sign);
+	// sprintf(header_auth, "Authorization: OSS %s:%s", client->access_id, custom->sign);
 
 	/**
 	 * 自定义 HTTP 请求头部

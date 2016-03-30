@@ -1,5 +1,5 @@
 #include <time.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include "include/oss_time.h"
 

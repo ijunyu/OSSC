@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include "include/oss_curl_callback.h"
 #include "include/oss_client.h"
 
@@ -69,19 +69,18 @@ object_curl_operation_recv_to_buffer_2nd_callback(
 		void *ptr, unsigned int size,
 		unsigned int nmemb, void *stream)
 {
-
-  unsigned int recv_size = size * nmemb;
-  param_buffer_t *recv_buffer = (param_buffer_t *)stream;
+	unsigned int recv_size = size * nmemb;
+	param_buffer_t *recv_buffer = (param_buffer_t *)stream;
  
-  recv_buffer->ptr = realloc(recv_buffer->ptr, recv_buffer->allocated + recv_size + 1);
-  if (recv_buffer->ptr == NULL) {
-    /* out of memory! */ 
-    exit(EXIT_FAILURE);
-  }
-  memcpy(&(recv_buffer->ptr[recv_buffer->allocated]), ptr, recv_size);
-  recv_buffer->allocated += recv_size;
-  recv_buffer->ptr[recv_buffer->allocated] = 0;
-  return recv_size;
+	recv_buffer->ptr = realloc(recv_buffer->ptr, recv_buffer->allocated + recv_size + 1);
+	if (recv_buffer->ptr == NULL) {
+	/* out of memory! */ 
+	exit(EXIT_FAILURE);
+	}
+	memcpy(&(recv_buffer->ptr[recv_buffer->allocated]), ptr, recv_size);
+	recv_buffer->allocated += recv_size;
+	recv_buffer->ptr[recv_buffer->allocated] = 0;
+	return recv_size;
 }
 
 unsigned int
@@ -140,4 +139,44 @@ object_curl_operation_header_callback_2nd(
 		header_buffer->left -= rlastmodified;
 	}
 	return size * nmemb;
+}
+
+int object_curl_progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)
+{
+	(void)dltotal;
+	(void)dlnow;
+
+	static int last_progress_callback_invoke = 0;
+	time_t now = time(NULL);
+	if (now - last_progress_callback_invoke < 1)
+	{
+		return 0;
+	}
+	last_progress_callback_invoke = now;
+
+	user_progress_data *data = clientp;
+	//printf("%lld %lld\n", ultotal, ulnow);
+
+	// Defaults to bytes/second
+	double speed = 0;
+	curl_easy_getinfo(data->handle, CURLINFO_SPEED_UPLOAD, &speed);
+	//printf("speed:%f", speed);
+	
+	// Time remaining
+	double leftTime = 0;
+
+	// Progress percentage
+	double progress = 0;
+
+	if (ultotal != 0 && speed != 0)
+	{
+		progress = (double)ulnow / ultotal * 100;
+		leftTime = (ultotal - ulnow) / speed;
+		//printf("\t%.2f%%\tRemaing time:%f\n", progress, leftTime);
+	}
+
+	if (data->cb != NULL)
+		data->cb(data->sender, speed, leftTime, progress);
+
+	return 0;
 }
